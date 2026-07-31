@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from pathlib import Path
 
 # ── PAGE CONFIG ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -29,7 +28,7 @@ st.markdown("---")
 # ── SIDEBAR FILTERS ───────────────────────────────────────────────────────────
 st.sidebar.header("🔧 Filters")
 
-year_range = st.sidebar.slider(
+year_min, year_max = st.sidebar.slider(
     "Select Year Range",
     min_value=int(df["year"].min()),
     max_value=int(df["year"].max()),
@@ -37,7 +36,6 @@ year_range = st.sidebar.slider(
 )
 
 all_countries = sorted(df["country"].unique().tolist())
-
 g7 = ["Canada", "France", "Germany", "Italy", "Japan", "United Kingdom", "United States"]
 selected_countries = st.sidebar.multiselect(
     "Select Countries (for comparison charts)",
@@ -48,34 +46,29 @@ selected_countries = st.sidebar.multiselect(
 top_n = st.sidebar.slider("Top N Countries to Show", min_value=5, max_value=20, value=10)
 
 # ── KPI METRICS ───────────────────────────────────────────────────────────────
-latest_year = df["year"].max()
-latest = df[df["year"] == latest_year]
+latest = df[df["year"] == year_max]
 
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
-    total_co2 = df[df["year"] == latest_year]["co2"].sum()
+    total_co2 = latest["co2"].sum()
     st.metric("🌐 Global CO₂ (Latest Year)", f"{total_co2:,.0f} Mt")
-
 with col2:
-    top_emitter = latest.sort_values("co2", ascending=False).iloc[0]["country"]
+    top_emitter = latest.dropna(subset=["co2"]).sort_values("co2", ascending=False).iloc[0]["country"]
     st.metric("🏭 Biggest Emitter", top_emitter)
-
 with col3:
     avg_per_capita = latest["co2_per_capita"].mean()
     st.metric("👤 Avg CO₂ per Capita", f"{avg_per_capita:.2f} t")
-
 with col4:
-    year_min, year_max = year_range
-    st.metric("📅 Year Range Selected", f"{year_min} – {year_max}")
+    st.metric("📅 Year Range", f"{year_min} – {year_max}")
 
 st.markdown("---")
 
 # ── CHART 1: TOP N EMITTERS ───────────────────────────────────────────────────
-st.subheader(f"📊 Q1 — Top {top_n} CO₂ Emitting Countries ({latest_year})")
+st.subheader(f"📊 Q1 — Top {top_n} CO₂ Emitting Countries ({year_max})")
 
 top_emitters = (
-    df[df["year"] == latest_year]
+    df[df["year"] == year_max]
+    .dropna(subset=["co2"])
     .groupby("country")["co2"]
     .sum()
     .sort_values(ascending=False)
@@ -88,7 +81,7 @@ fig1 = px.bar(
     x="co2",
     y="country",
     orientation="h",
-    title=f"China and USA Dominate Global CO₂ Emissions in {latest_year}",
+    title=f"Top {top_n} CO₂ Emitting Countries in {year_max}",
     labels={"co2": "CO₂ Emissions (Million Tonnes)", "country": "Country"},
     template="plotly_white",
     color="co2",
@@ -97,7 +90,7 @@ fig1 = px.bar(
 )
 fig1.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
 fig1.update_yaxes(autorange="reversed")
-fig1.update_layout(coloraxis_showscale=False, showlegend=False)
+fig1.update_layout(coloraxis_showscale=False)
 st.plotly_chart(fig1, use_container_width=True)
 
 st.markdown("---")
@@ -116,13 +109,12 @@ fig3 = px.line(
     filtered_global,
     x="year",
     y="co2",
-    title=f"Global CO₂ Emissions Rose Sharply Between {year_min} and {year_max}",
+    title=f"Global CO₂ Emissions Trend ({year_min}–{year_max})",
     labels={"co2": "CO₂ Emissions (Million Tonnes)", "year": "Year"},
     template="plotly_white",
     color_discrete_sequence=["#E25822"]
 )
 fig3.update_traces(line_width=2.5)
-fig3.update_layout(showlegend=False)
 st.plotly_chart(fig3, use_container_width=True)
 
 st.markdown("---")
@@ -136,13 +128,12 @@ if selected_countries:
         (df["year"] >= year_min) &
         (df["year"] <= year_max)
     ]
-
     fig7 = px.line(
         filtered_countries,
         x="year",
         y="co2",
         color="country",
-        title="G7 Countries Have Mostly Reduced Emissions Since 2000",
+        title=f"CO₂ Emissions by Selected Countries ({year_min}–{year_max})",
         labels={"co2": "CO₂ Emissions (Million Tonnes)", "year": "Year"},
         template="plotly_white"
     )
@@ -154,7 +145,7 @@ else:
 st.markdown("---")
 
 # ── CHART 4: FUEL TYPE BREAKDOWN ──────────────────────────────────────────────
-st.subheader("⛽ Q8 — CO₂ by Fuel Type Since 1990")
+st.subheader("⛽ Q8 — CO₂ by Fuel Type")
 
 fuel_data = (
     df[(df["year"] >= year_min) & (df["year"] <= year_max)]
@@ -168,7 +159,6 @@ fuel_melted = fuel_data.melt(
     var_name="Fuel Type",
     value_name="CO₂ Emissions"
 )
-
 fuel_melted["Fuel Type"] = fuel_melted["Fuel Type"].map({
     "coal_co2": "Coal",
     "oil_co2": "Oil",
@@ -180,7 +170,7 @@ fig8 = px.line(
     x="year",
     y="CO₂ Emissions",
     color="Fuel Type",
-    title="Coal Remains the Biggest CO₂ Source Despite Recent Plateau",
+    title=f"CO₂ by Fuel Type ({year_min}–{year_max})",
     labels={"CO₂ Emissions": "CO₂ (Million Tonnes)", "year": "Year"},
     template="plotly_white",
     color_discrete_map={"Coal": "#333333", "Oil": "#E25822", "Gas": "#4C8BE2"}
@@ -190,10 +180,11 @@ st.plotly_chart(fig8, use_container_width=True)
 
 st.markdown("---")
 
-# ── CHART 5: GDP vs CO₂ SCATTER ──────────────────────────────────────────────
-st.subheader("💰 Q6 — GDP vs CO₂ Emissions (Latest Available Year)")
+# ── CHART 5: GDP vs CO₂ ──────────────────────────────────────────────────────
+st.subheader("💰 Q6 — GDP vs CO₂ Emissions")
 
-scatter_data = df[df["year"] == 2022][["country", "gdp", "co2", "co2_per_capita"]].dropna()
+scatter_year = st.slider("Select Year for GDP vs CO₂", min_value=year_min, max_value=year_max, value=min(2022, year_max))
+scatter_data = df[df["year"] == scatter_year][["country", "gdp", "co2", "co2_per_capita"]].dropna()
 
 fig6 = px.scatter(
     scatter_data,
@@ -201,7 +192,7 @@ fig6 = px.scatter(
     y="co2",
     hover_name="country",
     size="co2_per_capita",
-    title="Richer Countries Emit More CO₂ — But Efficiency Varies Widely",
+    title=f"GDP vs CO₂ Emissions ({scatter_year})",
     labels={
         "gdp": "GDP (International $)",
         "co2": "CO₂ Emissions (Million Tonnes)",
