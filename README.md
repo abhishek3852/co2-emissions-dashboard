@@ -13,7 +13,7 @@ An interactive data visualization project analyzing global CO₂ emissions using
 - GitHub + Streamlit Community Cloud
 
 ## 🚀 Live Dashboard
-[Click here to view the live dashboard](YOUR_STREAMLIT_URL_HERE)
+(https://co2-emissions-dashboard-cksqyhmydjkgpo23ktn2ho.streamlit.app/)
 
 ## 📁 Structure
 - `data/app.py` — Streamlit dashboard
